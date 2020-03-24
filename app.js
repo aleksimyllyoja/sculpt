@@ -1,40 +1,21 @@
 var Settings = function() {
-  this.brush_radius = 0.2;
+  this.brush_radius = 0.5;
+  this.divide = function() { divide(mesh, 1); }
 };
 
-window.onload = function() {
+function init_gui() {
   settings = new Settings();
   gui = new dat.GUI();
-  gui.add(settings, 'brush_radius', 0, 0.5);
-};
 
-function grow_face(face, scale) {
-  var normalMatrixWorld = new THREE.Matrix3();
-  mesh.geometry.computeVertexNormals();
-  mesh.geometry.computeFaceNormals();
+  gui.add(settings, 'divide');
 
-  var vertices = mesh.geometry.vertices;
-  var matrixWorld = mesh.matrixWorld;
-
-  normalMatrixWorld.getNormalMatrix(matrixWorld);
-
-  var fv = new THREE.Vector3();
-  fv.copy(face.normal).applyMatrix3(normalMatrixWorld).normalize();
-
-  var indices = [face.a, face.b, face.c];
-
-  for (var j = 0; j < 3; j ++) {
-    vertices[ indices[ j ] ].applyMatrix4(matrixWorld);
-    vertices[ indices[ j ] ].addScaledVector(
-      fv,
-      scale
-    );
-  }
-
-  mesh.geometry.verticesNeedUpdate = true;
+  radius_controller = gui.add(settings, 'brush_radius', 0, 10);
+  radius_controller.onChange(function(value) {
+    highlight_sphere.geometry = new THREE.SphereGeometry(settings.brush_radius/10, 16, 16);
+  });
 }
 
-function grow_faces(scale) {
+function grow_faces(sign) {
 
   var normalMatrixWorld = new THREE.Matrix3();
   mesh.geometry.computeVertexNormals();
@@ -42,24 +23,33 @@ function grow_faces(scale) {
 
   var vertices = mesh.geometry.vertices;
   var matrixWorld = mesh.matrixWorld;
+  var faces = mesh.geometry.faces;
 
   normalMatrixWorld.getNormalMatrix(matrixWorld);
 
-  for(var i=0; i<active_faces.length;i++) {
-    var face = mesh.geometry.faces[active_faces[i]];
-    var fv = new THREE.Vector3();
-    fv.copy(face.normal).applyMatrix3(normalMatrixWorld).normalize();
+  for(var i = 0, l = faces.length; i < l; i ++) {
 
+    var face = mesh.geometry.faces[i];
+    var fv = new THREE.Vector3();
     var indices = [face.a, face.b, face.c];
 
-    for(var j = 0; j < 3; j++) {
-      vertices[ indices[ j ] ].applyMatrix4(matrixWorld);
-      vertices[ indices[ j ] ].addScaledVector(
-        fv,
-        scale
-      );
+    fv.copy(face.normal).applyMatrix3(normalMatrixWorld).normalize();
+
+    for(var j = 0; j<3; j++) {
+      var distance = active_point.distanceTo(vertices[indices[j]]);
+
+      if(distance < settings.brush_radius) {
+        distance /= settings.brush_radius;
+
+        distance = Math.max(0.1, distance);
+        var scale = (1/(distance*distance))/1000000.0;
+
+        vertices[indices[j]].applyMatrix4(matrixWorld);
+        vertices[indices[j]].addScaledVector(fv, sign*scale);
+      }
     }
   }
+
   raycaster = new THREE.Raycaster();
   mesh.geometry.verticesNeedUpdate = true;
 }
@@ -68,29 +58,36 @@ function grow_faces(scale) {
 var camera, scene, renderer;
 var geometry, material, mesh;
 var clock, controls, raycaster, mouse;
-var current_face;
-
 var highlight_geometry, highlight_material, highlight_sphere;
-
-init();
-animate();
+var active_point;
+var draw = false;
+var scoop = false;
 
 function divide(mesh, modifier){
   var modifier = new THREE.SubdivisionModifier(modifier);
   mesh.geometry = modifier.modify( mesh.geometry );
 }
 
-
-function onMouseMove( event ) {
+function on_mouse_move(event) {
 	mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
 	mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 }
 
-function onMouseClick(event) {
-  if(event.shiftKey) {
-    grow_faces(-0.01);
-  } else if(event.altKey) {
-    grow_faces(0.01);
+function on_keydown(event) {
+  if(event.key == 'd') {
+    draw = true;
+  }
+  if(event.key == 's') {
+    scoop = true;
+  }
+}
+
+function on_keyup(event) {
+  if(event.key == 'd') {
+    draw = false;
+  }
+  if(event.key == 's') {
+    scoop = false;
   }
 }
 
@@ -104,28 +101,21 @@ function init() {
 	scene = new THREE.Scene();
   scene.background = new THREE.Color( 0xffffff );
 
-	material = new THREE.MeshLambertMaterial({
-    color: 0xefefef,
-    //wireframe: true,
-    //transparent: true
-    vertexColors: THREE.FaceColors,
-    //transparent: true,
+	material = new THREE.MeshNormalMaterial({
+    flatShading: true,
   });
 
-  geometry = new THREE.IcosahedronGeometry(0.5, 4);
+  geometry = new THREE.IcosahedronGeometry(0.3, 3);
   geometry.dynamic = true;
 
 	mesh = new THREE.Mesh(geometry, material);
 
-  //divide(mesh, 5);
-  //grow(mesh, 0.2);
-
 	scene.add( mesh );
 
-  hemiLight = new THREE.HemisphereLight( 0xffffff, 0x555555, 1 );
-  scene.add(hemiLight)
+  //hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 1);
+  //scene.add(hemiLight)
 
-  highlight_geometry = new THREE.SphereGeometry(0.03, 16, 16);
+  highlight_geometry = new THREE.SphereGeometry(settings.brush_radius/10, 16, 16);
   highlight_material = new THREE.MeshBasicMaterial({ opacity: 0.3, transparent: true, color: 0xff0000 });
   highlight_sphere = new THREE.Mesh(highlight_geometry, highlight_material);
   scene.add(highlight_sphere);
@@ -139,59 +129,33 @@ function init() {
   //var light = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
   //scene.add(light);
 
+  //var axesHelper = new THREE.AxesHelper( 5 );
+  //scene.add( axesHelper );
+
 	renderer = new THREE.WebGLRenderer( { antialias: true } );
 	renderer.setSize( window.innerWidth, window.innerHeight );
 	document.body.appendChild( renderer.domElement );
 
-  window.addEventListener('mousemove', onMouseMove, false);
-  window.addEventListener('click', onMouseClick, false);
+  window.addEventListener('mousemove', on_mouse_move, false);
+  window.addEventListener('keydown', on_keydown, false);
+  window.addEventListener('keyup', on_keyup, false);
 
   controls = new THREE.TrackballControls(camera, renderer.domElement);
 }
 
-function highlight_face(mesh, index) {
-  mesh.geometry.faces[index].color.setHex(0xff0000);
-}
-
-var active_faces = [];
 function find_intersections() {
 
   raycaster.setFromCamera(mouse, camera);
 	var intersects = raycaster.intersectObjects( scene.children );
 
-  active_faces = [];
-	for(var i = 0; i < intersects.length; i++) {
+	for(var i=0; i<intersects.length; i++) {
     if(intersects[i].object == mesh) {
 
       highlight_sphere.position.x = intersects[i].point.x;
       highlight_sphere.position.y = intersects[i].point.y;
       highlight_sphere.position.z = intersects[i].point.z;
 
-      current_face = intersects[i].face;
-
-      var point = intersects[i].point;
-      var faceIndex = intersects[i].faceIndex;
-
-      for(var i=0; i<mesh.geometry.faces.length; i++) {
-
-        var face = mesh.geometry.faces[i];
-
-        var da = point.distanceTo(mesh.geometry.vertices[face.a]);
-        var db = point.distanceTo(mesh.geometry.vertices[face.b]);
-        var dc = point.distanceTo(mesh.geometry.vertices[face.c]);
-
-        var brush_radius = settings.brush_radius;
-        if(da <= brush_radius || db <= brush_radius || dc <= brush_radius) {
-          if(!active_faces.includes(i)) {
-            active_faces.push(i);
-            highlight_face(mesh, i);
-          }
-        }
-      }
-      //var fi = intersects[i].faceIndex;
-      //highlight_face(mesh, fi)
-      //highlight_face(mesh, fi+1)
-    //  mesh.geometry.elementsNeedUpdate = true;
+      active_point = intersects[i].point;
     }
 	}
 }
@@ -200,11 +164,21 @@ function animate() {
 	requestAnimationFrame( animate );
   controls.update();
 
-  for(var i=0; i<mesh.geometry.faces.length; i++) { mesh.geometry.faces[i].color.setHex(0xeeeeee) }
-
   find_intersections();
+
+  if(draw) {
+    grow_faces(1);
+  }
+  if(scoop) {
+    grow_faces(-1);
+  }
 
   mesh.geometry.elementsNeedUpdate = true;
 	renderer.render( scene, camera );
-
 }
+
+window.onload = function() {
+  init_gui();
+  init();
+  animate();
+};
