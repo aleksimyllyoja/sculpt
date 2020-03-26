@@ -4,13 +4,23 @@
 		<style>
 			body { margin: 0; }
 			canvas { display: block; }
+			#log {
+				position: absolute;
+				top: 0;
+				white-space: pre;
+				font-size: 0.7em;
+				opacity: 0.4;
+			}
+			#log:hover {
+				opacity: 1;
+			}
 		</style>
 	</head>
 	<body>
-
+		<div id="log"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
-    <script src="SubdivisionModifier.js"></script>
+	  <script src="SubdivisionModifier.js"></script>
 		<script src="TrackballControls.js"></script>
 		<script src="app.js"></script>
 	</body>

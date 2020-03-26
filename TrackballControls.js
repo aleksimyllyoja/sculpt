@@ -22,21 +22,24 @@ THREE.TrackballControls = function ( object, domElement ) {
 
 	this.screen = { left: 0, top: 0, width: 0, height: 0 };
 
-	this.rotateSpeed = 1.0;
-	this.zoomSpeed = 1.2;
+	this.rotateSpeed = 8.0;
+	this.zoomSpeed = 10;
 	this.panSpeed = 0.3;
 
 	this.noRotate = false;
 	this.noZoom = false;
 	this.noPan = false;
 
-	this.staticMoving = false;
+	this.lockX = false;
+	this.lockY = false;
+
+	this.staticMoving = true;
 	this.dynamicDampingFactor = 0.2;
 
 	this.minDistance = 0;
 	this.maxDistance = Infinity;
 
-	this.keys = [ 65 /*A*/, 83 /*S*/, 68 /*D*/ ];
+	this.keys = [ 81 /*A*/, 87 /*S*/, 69 /*D*/ ];
 
 	this.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ZOOM, RIGHT: THREE.MOUSE.PAN };
 
@@ -167,6 +170,13 @@ THREE.TrackballControls = function ( object, domElement ) {
 				_eye.applyQuaternion( quaternion );
 				_this.object.up.applyQuaternion( quaternion );
 
+				if(_this.lockX) {
+					_eye.x = 0;
+				}
+				if(_this.lockY) {
+					_eye.y = 0;
+				}
+				//console.log(_this.object.up.x=0);
 				_lastAxis.copy( axis );
 				_lastAngle = angle;
 
@@ -183,7 +193,6 @@ THREE.TrackballControls = function ( object, domElement ) {
 			_movePrev.copy( _moveCurr );
 
 		};
-
 	}() );
 
 

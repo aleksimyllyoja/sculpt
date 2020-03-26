@@ -1,21 +1,40 @@
+var GEOMETRY_DETAIL = 3;
+
 var Settings = function() {
-  this.brush_radius = 0.5;
+  this.brush_radius = 0.05;
+  this.mirror_x = false;
+  this.mirror_y = false;
+  this.mirror_z = false;
   this.divide = function() { divide(mesh, 1); }
 };
+
+var radius_controller;
 
 function init_gui() {
   settings = new Settings();
   gui = new dat.GUI();
 
   gui.add(settings, 'divide');
+  gui.add(settings, 'mirror_x');
+  gui.add(settings, 'mirror_y');
+  gui.add(settings, 'mirror_z');
 
-  radius_controller = gui.add(settings, 'brush_radius', 0, 10);
+  radius_controller = gui.add(settings, 'brush_radius', 0, 0.3, 0.0001);
   radius_controller.onChange(function(value) {
-    highlight_sphere.geometry = new THREE.SphereGeometry(settings.brush_radius/10, 16, 16);
+    highlight_sphere.geometry = new THREE.SphereGeometry(settings.brush_radius, 16, 16);
   });
 }
 
-function grow_faces(sign) {
+var _log = document.getElementById("log");
+function log(s) {
+   _log.innerHTML = s+"\n"+_log.innerHTML;
+}
+
+function scalef(x) {
+  return (Math.sin(Math.PI/2-10*x/Math.PI)+1.0)/2.0;
+}
+
+function grow_faces(sign, point) {
 
   var normalMatrixWorld = new THREE.Matrix3();
   mesh.geometry.computeVertexNormals();
@@ -35,14 +54,14 @@ function grow_faces(sign) {
 
     fv.copy(face.normal).applyMatrix3(normalMatrixWorld).normalize();
 
+    //mesh.geometry.verticesNeedUpdate = true;
+    //mesh.geometry.facesNeedUpdate = true;
+
     for(var j = 0; j<3; j++) {
-      var distance = active_point.distanceTo(vertices[indices[j]]);
+      var distance = point.distanceTo(vertices[indices[j]]);
 
       if(distance < settings.brush_radius) {
-        distance /= settings.brush_radius;
-
-        distance = Math.max(0.1, distance);
-        var scale = (1/(distance*distance))/1000000.0;
+        var scale = scalef(distance/settings.brush_radius)*0.0005;
 
         vertices[indices[j]].applyMatrix4(matrixWorld);
         vertices[indices[j]].addScaledVector(fv, sign*scale);
@@ -54,14 +73,91 @@ function grow_faces(sign) {
   mesh.geometry.verticesNeedUpdate = true;
 }
 
+function divide_face(face_index) {
+    // Get the wanted face
+  var face = mesh.geometry.faces[face_index];
+  // Get the middle between two of the three vectors
+  var vector = new THREE.Vector3(
+    (mesh.geometry.vertices[face.b].x + mesh.geometry.vertices[face.c].x) / 2,
+    (mesh.geometry.vertices[face.b].y + mesh.geometry.vertices[face.c].y) / 2,
+    (mesh.geometry.vertices[face.b].z + mesh.geometry.vertices[face.c].z) / 2
+  );
+  // Push vector in vertices array
+  mesh.geometry.vertices.push(vector);
+  var index = mesh.geometry.vertices.length - 1; // This method of getting the index is not thread safe!
+
+  // Adding first face
+  var temp = mesh.geometry.faces[0].b;
+  mesh.geometry.faces[0] = new THREE.Face3(
+    face.a,
+    index,
+    face.c,
+    undefined, undefined, face.materialIndex
+  );
+
+  // Adding second face
+  mesh.geometry.faces.push(
+    new THREE.Face3(
+      temp,
+      index,
+      face.c,
+      undefined, undefined, face.materialIndex
+    )
+  );
+
+  mesh.geometry.faceVertexUvs[0] = [];
+
+  mesh.geometry.faces.forEach(function(face) {
+      var uvs = [];
+      var ids = [ 'a', 'b', 'c'];
+      for( var i = 0; i < ids.length; i++ ) {
+          var vertex = geometry.vertices[ face[ ids[ i ] ] ].clone();
+
+          var n = vertex.normalize();
+          var yaw = .5 - Math.atan( n.z, - n.x ) / ( 2.0 * Math.PI );
+          var pitch = .5 - Math.asin( n.y ) / Math.PI;
+
+          var u = yaw,
+              v = pitch;
+          uvs.push( new THREE.Vector2( u, v ) );
+      }
+      mesh.geometry.faceVertexUvs[ 0 ].push( uvs );
+  });
+
+  geometry.computeFaceNormals();
+	geometry.computeVertexNormals();
+
+  mesh.material = new THREE.MeshNormalMaterial({
+    flatShading: true,
+    //wireframe: true
+  });
+  mesh.material.needsUpdate = true;
+  mesh.geometry.uvsNeedUpdate = true;
+
+}
 
 var camera, scene, renderer;
 var geometry, material, mesh;
 var clock, controls, raycaster, mouse;
 var highlight_geometry, highlight_material, highlight_sphere;
-var active_point;
+var active_point, mirror_point;
 var draw = false;
 var scoop = false;
+
+function foo() {
+  var geometry;
+  for(var i=0; i<mesh.geometry.vertices; i++) {
+    geometry.vertices.push(mesh.geometry.vertices[i]);
+  }
+
+  for(var i=0; i<mesh.geometry.faces; i++) {
+    geometry.faces.push(mesh.geometry.faces[i]);
+  }
+
+  geometry.computeBoundingSphere();
+
+  mesh.geometry = geometry;
+}
 
 function divide(mesh, modifier){
   var modifier = new THREE.SubdivisionModifier(modifier);
@@ -80,14 +176,38 @@ function on_keydown(event) {
   if(event.key == 's') {
     scoop = true;
   }
+
+  if(event.key == 'z') {
+    radius_controller.setValue(settings.brush_radius-Math.max(0.001, settings.brush_radius)/2.0);
+  }
+  if(event.key == 'x') {
+    radius_controller.setValue(settings.brush_radius+Math.max(0.001, settings.brush_radius));
+  }
+
+  if(event.key == 'c') controls.lockX = !controls.lockX;
+  if(event.key == 'v') controls.lockY = !controls.lockY;
+  if(event.key == '<') divide(mesh, 1);
+  if(event.key == 'r') {
+    camera.position.y = 0;
+    camera.position.x = 0;
+    camera.position.z = 1;
+
+    camera.rotation.x = 0;
+    camera.rotation.y = 0
+    camera.rotation.z = 0;
+
+    camera.up.x = 0, camera.up.y = 1, camera.up.z = 0;
+  }
 }
 
 function on_keyup(event) {
   if(event.key == 'd') {
     draw = false;
+    log(JSON.stringify(active_point));
   }
   if(event.key == 's') {
     scoop = false;
+    log(JSON.stringify(active_point));
   }
 }
 
@@ -103,9 +223,10 @@ function init() {
 
 	material = new THREE.MeshNormalMaterial({
     flatShading: true,
+    //wireframe: true
   });
 
-  geometry = new THREE.IcosahedronGeometry(0.3, 3);
+  geometry = new THREE.IcosahedronGeometry(0.3, GEOMETRY_DETAIL);
   geometry.dynamic = true;
 
 	mesh = new THREE.Mesh(geometry, material);
@@ -115,7 +236,7 @@ function init() {
   //hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 1);
   //scene.add(hemiLight)
 
-  highlight_geometry = new THREE.SphereGeometry(settings.brush_radius/10, 16, 16);
+  highlight_geometry = new THREE.SphereGeometry(settings.brush_radius, 16, 16);
   highlight_material = new THREE.MeshBasicMaterial({ opacity: 0.3, transparent: true, color: 0xff0000 });
   highlight_sphere = new THREE.Mesh(highlight_geometry, highlight_material);
   scene.add(highlight_sphere);
@@ -123,14 +244,14 @@ function init() {
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
 
-  //helper = new THREE.FaceNormalsHelper(mesh, 0.01, 0x00ff00, 1 );
+  //helper = new THREE.FaceNormalsHelper(mesh, 0.1, 0x00ff00, 1);
   //scene.add( helper );
 
   //var light = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
   //scene.add(light);
 
-  //var axesHelper = new THREE.AxesHelper( 5 );
-  //scene.add( axesHelper );
+  var axesHelper = new THREE.AxesHelper( 5 );
+  scene.add( axesHelper );
 
 	renderer = new THREE.WebGLRenderer( { antialias: true } );
 	renderer.setSize( window.innerWidth, window.innerHeight );
@@ -143,34 +264,60 @@ function init() {
   controls = new THREE.TrackballControls(camera, renderer.domElement);
 }
 
-function find_intersections() {
+function find_intersections(point) {
+  raycaster.setFromCamera(point, camera);
+	var intersects = raycaster.intersectObjects(scene.children);
 
-  raycaster.setFromCamera(mouse, camera);
-	var intersects = raycaster.intersectObjects( scene.children );
+  active_point = handle_intersections(intersects);
+  highlight_selection();
 
-	for(var i=0; i<intersects.length; i++) {
-    if(intersects[i].object == mesh) {
+  if(settings.mirror_x || settings.mirror_y || settings.mirror_z) {
+    pm = active_point.clone();
+    if(settings.mirror_x) pm.x = -pm.x;
+    if(settings.mirror_y) pm.y = -pm.y;
+    if(settings.mirror_z) pm.z = -pm.z;
 
-      highlight_sphere.position.x = intersects[i].point.x;
-      highlight_sphere.position.y = intersects[i].point.y;
-      highlight_sphere.position.z = intersects[i].point.z;
+    mirror_point = find_mirror(pm);
+  }
+}
 
-      active_point = intersects[i].point;
-    }
+function find_mirror(p0) {
+  var direction = new THREE.Vector3(0, 0, 0);
+  direction.sub(p0);
+  raycaster.set(p0, direction);
+
+  var intersects = raycaster.intersectObjects(scene.children);
+
+  return handle_intersections(intersects);
+}
+
+function handle_intersections(intersects) {
+  for(var i=0; i<intersects.length; i++) {
+    if(intersects[i].object == mesh) return intersects[i].point;
 	}
+}
+
+function highlight_selection() {
+  if(active_point) {
+    highlight_sphere.position.x = active_point.x;
+    highlight_sphere.position.y = active_point.y;
+    highlight_sphere.position.z = active_point.z;
+  }
 }
 
 function animate() {
 	requestAnimationFrame( animate );
   controls.update();
 
-  find_intersections();
+  find_intersections(mouse);
 
   if(draw) {
-    grow_faces(1);
+    grow_faces(1, active_point);
+    if(settings.mirror_x || settings.mirror_y || settings.mirror_z) grow_faces(1, mirror_point);
   }
   if(scoop) {
-    grow_faces(-1);
+    grow_faces(-1, active_point);
+    if(settings.mirror_x || settings.mirror_y || settings.mirror_z) grow_faces(-1, mirror_point);
   }
 
   mesh.geometry.elementsNeedUpdate = true;
