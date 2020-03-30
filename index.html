@@ -4,20 +4,28 @@
 		<style>
 			body { margin: 0; }
 			canvas { display: block; }
-			#log {
+			#h {
 				position: absolute;
 				top: 0;
+				left: 1em;
 				white-space: pre;
-				font-size: 0.7em;
+				font-size: 1.3em;
 				opacity: 0.4;
 			}
-			#log:hover {
+			#h:hover {
 				opacity: 1;
 			}
 		</style>
 	</head>
 	<body>
-		<div id="log"></div>
+<div id="h">
+Keys:
+d - grow
+s - sculpt
+< - subdivide
+z - smaller brush
+x - larger brush
+</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
 	  <script src="SubdivisionModifier.js"></script>

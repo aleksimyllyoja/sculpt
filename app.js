@@ -15,19 +15,14 @@ function init_gui() {
   gui = new dat.GUI();
 
   gui.add(settings, 'divide');
-  gui.add(settings, 'mirror_x');
+  /*gui.add(settings, 'mirror_x');
   gui.add(settings, 'mirror_y');
   gui.add(settings, 'mirror_z');
-
+  */
   radius_controller = gui.add(settings, 'brush_radius', 0, 0.3, 0.0001);
   radius_controller.onChange(function(value) {
     highlight_sphere.geometry = new THREE.SphereGeometry(settings.brush_radius, 16, 16);
   });
-}
-
-var _log = document.getElementById("log");
-function log(s) {
-   _log.innerHTML = s+"\n"+_log.innerHTML;
 }
 
 function scalef(x) {
@@ -53,10 +48,6 @@ function grow_faces(sign, point) {
     var indices = [face.a, face.b, face.c];
 
     fv.copy(face.normal).applyMatrix3(normalMatrixWorld).normalize();
-
-    //mesh.geometry.verticesNeedUpdate = true;
-    //mesh.geometry.facesNeedUpdate = true;
-
     for(var j = 0; j<3; j++) {
       var distance = point.distanceTo(vertices[indices[j]]);
 
@@ -71,69 +62,6 @@ function grow_faces(sign, point) {
 
   raycaster = new THREE.Raycaster();
   mesh.geometry.verticesNeedUpdate = true;
-}
-
-function divide_face(face_index) {
-    // Get the wanted face
-  var face = mesh.geometry.faces[face_index];
-  // Get the middle between two of the three vectors
-  var vector = new THREE.Vector3(
-    (mesh.geometry.vertices[face.b].x + mesh.geometry.vertices[face.c].x) / 2,
-    (mesh.geometry.vertices[face.b].y + mesh.geometry.vertices[face.c].y) / 2,
-    (mesh.geometry.vertices[face.b].z + mesh.geometry.vertices[face.c].z) / 2
-  );
-  // Push vector in vertices array
-  mesh.geometry.vertices.push(vector);
-  var index = mesh.geometry.vertices.length - 1; // This method of getting the index is not thread safe!
-
-  // Adding first face
-  var temp = mesh.geometry.faces[0].b;
-  mesh.geometry.faces[0] = new THREE.Face3(
-    face.a,
-    index,
-    face.c,
-    undefined, undefined, face.materialIndex
-  );
-
-  // Adding second face
-  mesh.geometry.faces.push(
-    new THREE.Face3(
-      temp,
-      index,
-      face.c,
-      undefined, undefined, face.materialIndex
-    )
-  );
-
-  mesh.geometry.faceVertexUvs[0] = [];
-
-  mesh.geometry.faces.forEach(function(face) {
-      var uvs = [];
-      var ids = [ 'a', 'b', 'c'];
-      for( var i = 0; i < ids.length; i++ ) {
-          var vertex = geometry.vertices[ face[ ids[ i ] ] ].clone();
-
-          var n = vertex.normalize();
-          var yaw = .5 - Math.atan( n.z, - n.x ) / ( 2.0 * Math.PI );
-          var pitch = .5 - Math.asin( n.y ) / Math.PI;
-
-          var u = yaw,
-              v = pitch;
-          uvs.push( new THREE.Vector2( u, v ) );
-      }
-      mesh.geometry.faceVertexUvs[ 0 ].push( uvs );
-  });
-
-  geometry.computeFaceNormals();
-	geometry.computeVertexNormals();
-
-  mesh.material = new THREE.MeshNormalMaterial({
-    flatShading: true,
-    //wireframe: true
-  });
-  mesh.material.needsUpdate = true;
-  mesh.geometry.uvsNeedUpdate = true;
-
 }
 
 var camera, scene, renderer;
@@ -184,8 +112,6 @@ function on_keydown(event) {
     radius_controller.setValue(settings.brush_radius+Math.max(0.001, settings.brush_radius));
   }
 
-  if(event.key == 'c') controls.lockX = !controls.lockX;
-  if(event.key == 'v') controls.lockY = !controls.lockY;
   if(event.key == '<') divide(mesh, 1);
   if(event.key == 'r') {
     camera.position.y = 0;
@@ -203,11 +129,9 @@ function on_keydown(event) {
 function on_keyup(event) {
   if(event.key == 'd') {
     draw = false;
-    log(JSON.stringify(active_point));
   }
   if(event.key == 's') {
     scoop = false;
-    log(JSON.stringify(active_point));
   }
 }
 
